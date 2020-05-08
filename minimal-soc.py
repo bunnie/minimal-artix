@@ -19,6 +19,8 @@ from litex.soc.integration.builder import Builder
 _io = [
     ("clk100", 0, Pins("J19"), IOStandard("LVCMOS33")),
     ("led", 0, Pins("J20"), IOStandard("LVCMOS33")),
+    ("clkslow", 0, Pins("L19"), IOStandard("LVCMOS33")),
+    ("button", 0, Pins("F18"), IOStandard("LVCMOS33")),
 ]
 
 class Platform(XilinxPlatform):
@@ -41,9 +43,26 @@ class Blink(Module):
         self.clock_domains.cd_sys   = ClockDomain()
         self.comb += self.cd_sys.clk.eq(platform.request("clk100"))
 
+        self.clock_domains.cd_slow  = ClockDomain()
+        self.comb += self.cd_slow.clk.eq(platform.request("clkslow"))
+
+        button_d = Signal(2)
+        button_r = Signal()
+        self.sync.slow += [
+            button_d[0].eq(platform.request("button")),
+            button_d[1].eq(button_d),
+            button_r.eq(~button_d[1] & button_d[0])
+        ]
+
+        rising_fast = Signal()
         counter = Signal(26)
         self.sync += [
-            counter.eq(counter + 1)
+            rising_fast.eq(button_r),
+            If(rising_fast,
+                counter.eq(0),
+            ).Else(
+                counter.eq(counter + 1),
+            )
         ]
         self.comb += [
             platform.request("led").eq(counter[25])

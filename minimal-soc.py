@@ -49,14 +49,14 @@ class Blink(Module):
         self.sync += [
             syncbutton_d.eq(syncbutton)
         ]
-        syncbutton_r = Signal()
+        syncbutton_f = Signal()
         self.comb += [
-            syncbutton_r.eq(syncbutton_d & ~syncbutton)
+            syncbutton_f.eq(syncbutton_d & ~syncbutton)
         ]
 
         counter = Signal(26)
         self.sync += [
-            If(syncbutton_r,
+            If(syncbutton_f,
                 counter.eq(0),
             ).Else(
                 counter.eq(counter + 1)

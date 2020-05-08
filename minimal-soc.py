@@ -16,8 +16,14 @@ from litex.build.xilinx import VivadoProgrammer, XilinxPlatform
 from litex.build.generic_platform import Pins, IOStandard
 from litex.soc.integration.builder import Builder
 
+from litex.soc.integration.soc_core import *
+from litex.soc.cores.clock import S7MMCM
+from litex.soc.interconnect.csr import *
+from litex.soc.integration.doc import AutoDoc
+import litex.soc.doc as lxsocdoc
+
 _io = [
-    ("clk100", 0, Pins("J19"), IOStandard("LVCMOS33")),
+    ("clk12", 0, Pins("J19"), IOStandard("LVCMOS33")),
     ("led", 0, Pins("J20"), IOStandard("LVCMOS33")),
 ]
 
@@ -29,28 +35,34 @@ class Platform(XilinxPlatform):
     def do_finalize(self, fragment):
         XilinxPlatform.do_finalize(self, fragment)
 
-class Blink(Module):
+class Gpio(Module, AutoCSR, AutoDoc):
+    def __init__(self, ledpad):
+        self.led = CSRStorage(fields=[
+            CSRField("ledstate", size=1, description="writing `1` lights an LED", reset=1),
+            CSRField("ledpulse", size=1, description="Writing `1` sends a single clock pulse to the LED", pulse=1)
+        ])
+        self.comb += ledpad.eq(self.led.fields.ledstate | self.led.fields.ledpulse)
+
+class Blink(SoCCore):
     def __init__(self, platform, **kwargs):
-        self.platform = platform
-        self.sys_clk_freq = 100e6
-        self.cpu_type = None
-        self.mem_regions = {}
-        self.constants = {}
-        self.csr_regions = {}
+        sys_clk_freq=100e6
+        SoCCore.__init__(self, platform, sys_clk_freq, csr_data_width=32,
+            integrated_rom_size  = 0x8000,
+            ident                = "LiteX Base SoC soft blink",
+            cpu_type             = "vexriscv",
+            with_uart            = False,
+            **kwargs)
 
-        self.clock_domains.cd_sys   = ClockDomain()
-        self.comb += self.cd_sys.clk.eq(platform.request("clk100"))
+        clk12_bufg = Signal()
+        self.specials += Instance("BUFG", i_I=platform.request("clk12"), o_O=clk12_bufg)
 
-        counter = Signal(26)
-        self.sync += [
-            counter.eq(counter + 1)
-        ]
-        self.comb += [
-            platform.request("led").eq(counter[25])
-        ]
+        self.submodules.mmcm = mmcm = S7MMCM(speedgrade=-1)
+        mmcm.register_clkin(clk12_bufg, 12e6)
+        self.clock_domains.cd_sys = ClockDomain()
+        mmcm.create_clkout(self.cd_sys, sys_clk_freq)
 
-    def build(self, *args, **kwargs):
-        return self.platform.build(self, *args, **kwargs)
+        self.submodules.led_example = Gpio(platform.request("led"))
+        self.add_csr("led_example")
 
 def main():
     platform = Platform()
@@ -58,6 +70,7 @@ def main():
     builder = Builder(soc, output_dir="build", compile_software=False)
     vns = builder.build()
     soc.do_exit(vns)
+    lxsocdoc.generate_docs(soc, "build/documentation", note_pulses=True)
 
 if __name__ == "__main__":
     main()

@@ -10,3 +10,6 @@
 [submodule "deps/migen"]
 	path = deps/migen
 	url = https://github.com/m-labs/migen.git
+[submodule "deps/pythondata-cpu-vexriscv"]
+	path = deps/pythondata-cpu-vexriscv
+	url = https://github.com/litex-hub/pythondata-cpu-vexriscv.git

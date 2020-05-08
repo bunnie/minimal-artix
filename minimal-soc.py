@@ -13,12 +13,14 @@ import lxbuildenv
 
 from migen import *
 from litex.build.xilinx import VivadoProgrammer, XilinxPlatform
-from litex.build.generic_platform import Pins, IOStandard
+from litex.build.generic_platform import *
 from litex.soc.integration.builder import Builder
+from migen.genlib.cdc import MultiReg
 
 _io = [
     ("clk100", 0, Pins("J19"), IOStandard("LVCMOS33")),
-    ("led", 0, Pins("J20"), IOStandard("LVCMOS33")),
+    ("led", 0, Pins("J20"), IOStandard("LVCMOS33"), Misc("DRIVE=8"), Misc("SLEW=SLOW")),
+    ("button", 0, Pins("F18"), IOStandard("LVCMOS33"), Misc("PULLUP True"))
 ]
 
 class Platform(XilinxPlatform):
@@ -41,13 +43,29 @@ class Blink(Module):
         self.clock_domains.cd_sys   = ClockDomain()
         self.comb += self.cd_sys.clk.eq(platform.request("clk100"))
 
+        syncbutton = Signal()
+        self.specials += MultiReg(platform.request("button"), syncbutton)
+        syncbutton_d = Signal()
+        self.sync += [
+            syncbutton_d.eq(syncbutton)
+        ]
+        syncbutton_r = Signal()
+        self.comb += [
+            syncbutton_r.eq(syncbutton_d & ~syncbutton)
+        ]
+
         counter = Signal(26)
         self.sync += [
-            counter.eq(counter + 1)
+            If(syncbutton_r,
+                counter.eq(0),
+            ).Else(
+                counter.eq(counter + 1)
+            )
         ]
         self.comb += [
             platform.request("led").eq(counter[25])
         ]
+
 
     def build(self, *args, **kwargs):
         return self.platform.build(self, *args, **kwargs)

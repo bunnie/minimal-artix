@@ -15,10 +15,13 @@ from migen import *
 from litex.build.xilinx import VivadoProgrammer, XilinxPlatform
 from litex.build.generic_platform import Pins, IOStandard
 from litex.soc.integration.builder import Builder
+from migen.genlib.cdc import MultiReg
 
 _io = [
     ("clk100", 0, Pins("J19"), IOStandard("LVCMOS33")),
     ("led", 0, Pins("J20"), IOStandard("LVCMOS33")),
+    ("clkslow", 0, Pins("L19"), IOStandard("LVCMOS33")),
+    ("button", 0, Pins("F18"), IOStandard("LVCMOS33")),
 ]
 
 class Platform(XilinxPlatform):
@@ -40,13 +43,36 @@ class Blink(Module):
 
         self.clock_domains.cd_sys   = ClockDomain()
         self.comb += self.cd_sys.clk.eq(platform.request("clk100"))
+        self.clock_domains.cd_slow  = ClockDomain()
+        self.comb += self.cd_slow.clk.eq(platform.request("clkslow"))
 
-        counter = Signal(26)
+        example = ClockDomainsRenamer({"sys":"slow"})(FSM(reset_state="IDLE"))
+        self.submodules += example
+
+        button = Signal()
+        self.specials += MultiReg(platform.request("button"), button, odomain="slow")
+        buttonpress = Signal()
+        counter = Signal(max=400, reset=400)
+        example.act("IDLE",
+            NextValue(buttonpress, 0),
+            If(button,
+                NextState("DEBOUNCE"),
+                NextValue(counter, 400),
+            ),
+        )
+        example.act("DEBOUNCE",
+            NextValue(counter, counter - 1),
+            If(counter == 0,
+                NextValue(buttonpress, 1),
+                NextState("IDLE"),
+            ),
+            If(~button,
+                NextState("IDLE"),
+            )
+        )
+
         self.sync += [
-            counter.eq(counter + 1)
-        ]
-        self.comb += [
-            platform.request("led").eq(counter[25])
+            platform.request("led").eq(buttonpress)
         ]
 
     def build(self, *args, **kwargs):

@@ -45,8 +45,20 @@ class Blink(Module):
         self.sync += [
             counter.eq(counter + 1)
         ]
+
+        # add getattr/setattr example to this too
+        s = counter[25]
+        for i in range(5):
+            next = Signal()
+            self.sync += next.eq(s)
+            s = next
+
+        for i in range(3):
+            setattr(self, 'xor' + str(i), Signal())
+            self.comb += getattr(self, 'xor' + str(i)).eq(counter[i] ^ counter[i+1])
+
         self.comb += [
-            platform.request("led").eq(counter[25])
+            platform.request("led").eq(s ^ self.xor2 ^ self.xor1 ^ self.xor0)
         ]
 
     def build(self, *args, **kwargs):

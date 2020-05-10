@@ -46,7 +46,6 @@ class Blink(Module):
             counter.eq(counter + 1)
         ]
 
-        # add getattr/setattr example to this too
         s = counter[25]
         for i in range(5):
             next = Signal()
